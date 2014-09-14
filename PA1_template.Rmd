@@ -1,25 +1,108 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "PA_template"
+author: "T Huffman"
+date: "Sunday, September 14, 2014"
+output: html_document
 ---
+# Peer Assignment 1
 
+This assigment is to demonstrate how reprocible process is essential to dat science.
 
-## Loading and preprocessing the data
+## Loading and processing the data
 
+This first thing to start will be loading of the necessary packages used in the assigment and load the data file used.
+```{r,echo=TRUE}
+library(reshape)
+library(ggplot2)
+library(plyr)
+options(warn=-1)
+activityData<-read.csv("activity.csv", sep=",", stringsAsFactors=F)
+```
 
+The dataset has a few zeros and NA's associated with the steps variable. We'll first get an index o the location of the zero entires. 
+```{r, echo=TRUE}
+zeroIdx<-which(activityData$steps == 0)
+head(zeroIdx)
+```
+Then we'll set them to NA's. create a new data frame and eliminate NA's using na.omit.
+```{r, echo=TRUE}
+activityData$steps[zeroIdx]<-c(NA)
+cleanActivityData<-na.omit(activityData)
+```
+Now that we have a clean dataset lets create a histogram of the data showing the frequency of step.
+```{r, echo=TRUE}
+hist(cleanActivityData$steps,breaks=70, xlab="Steps", main="Histogram of Steps")
+```
 
-## What is mean total number of steps taken per day?
+## What is the mean total number of steps taken per day
 
+From this point we'll calculate the mean and median of the steps withn the data frame.
+First the mean
+```{r, echo=TRUE}
+cleanActivityDataMean<-tapply(cleanActivityData$steps,cleanActivityData$date, mean, na.rm=T)
+head(cleanActivityDataMean, n=10)
+```
+Then the median
+```{r, echo=TRUE}
+cleanActivityDataMedian<-tapply(cleanActivityData$steps,cleanActivityData$date, median, na.rm=T)
+head(cleanActivityDataMedian, n=10)
+```
 
+## What is the average daily activity pattern
 
-## What is the average daily activity pattern?
+Used tapply to create generate the means associated with the data set
+```{r, echo=TRUE}
+cleanInterval<-tapply(cleanActivityData$steps,cleanActivityData$interval, mean, na.rm=T)
+cleanMeanDF<-data.frame(as.numeric(cleanInterval), dimnames(cleanInterval), stringsAsFactors=F)
+names(cleanMeanDF)<-c("steps","interval")
+plot(cleanMeanDF$interval,cleanMeanDF$steps, type="l")
+```
+### Inputing missing values
 
+Using the initial data frame, input mean values where NA's exists.
 
+The folowing reporst the nember of missing values
 
-## Imputing missing values
+```{r, echo=TRUE}
+sum(!complete.cases(activityData))
+```
 
+Now we'll fill in those missing values with the mean value for the observation
 
+```{r, echo=TRUE}
+cleanMeans<-ddply(cleanActivityData,.(date,interval), summarise, mean = mean(steps))
+for(i in 1:length(activityData$steps))
+{
+       if(is.na(activityData$steps[i])){
+                if(length(cleanMeans$mean[cleanMeans$interval == activityData$interval[i]]) >0){
+                        activityData$steps[i]<-cleanMeans$mean[cleanMeans$interval == activityData$interval[i]]
+                }else{
+                        activityData$steps[i]<-as.numeric(0)
+                }        
+       }
+}
+```
+Now to recreate a histogram with the missing data added
 
+```{r, echo=TRUE}
+newCleanActivity<-activityData[which(activityData$steps !=0),]
+newCleanMeans<-tapply(newCleanActivity$steps,newCleanActivity$date, mean, na.rm=T)
+newCleanMedian<-tapply(newCleanActivity$steps,newCleanActivity$date, median, na.rm=T)
+meansDF<-data.frame(as.numeric(newCleanMeans),dimnames(newCleanMeans))
+names(meansDF)<-c("step_means", "date")
+hist(meansDF$step_means,breaks=70)
+```
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Finally create a plot that shows the differences between weekdays and weekends
+
+```{r, echo=TRUE}
+activityDataFactor<-activityData
+activityDataFactor$minutes<-as.factor(activityData$interval)
+activityDataFactor$weekdays<-weekdays(as.Date(activityData$date))
+activityDataFactor$weekdays<-gsub("Monday|Tuesday|Wednesday|Thursday|Friday","Weekday",activityDataFactor$weekdays)
+activityDataFactor$weekdays<-gsub("Saturday|Sunday","Weekend",activityDataFactor$weekdays)
+
+g<-ggplot(activityDataFactor, aes(interval,steps))
+g+geom_line()+facet_grid(.~weekdays)
+```
